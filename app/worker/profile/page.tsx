@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { Profile } from '@/types/database';
 
 export default async function WorkerProfilePage() {
     const supabase = await createClient();
+    const admin = createAdminClient();
 
     const {
         data: { user },
@@ -31,7 +33,7 @@ export default async function WorkerProfilePage() {
     }).filter(Boolean) as string[];
 
     // Count assigned tasks (checking both user.id and team_member.id)
-    const { data: teamMember } = await supabase
+    const { data: teamMember } = await admin
         .from('team_members')
         .select('id')
         .eq('profile_id', user.id)
@@ -39,15 +41,19 @@ export default async function WorkerProfilePage() {
 
     const workerIds = new Set([user.id, teamMember?.id].filter(Boolean));
 
-    const { data: scheduleEntries } = await supabase
+    const { data: scheduleEntries } = await admin
         .from('schedule_entries')
         .select('task_id, assigned_workers');
 
     const myTaskIds = new Set(
         (scheduleEntries || [])
             .filter((e) => {
-                const workers = e.assigned_workers as { id: string }[];
-                return workers?.some((w) => workerIds.has(w.id));
+                const workers = e.assigned_workers as { id: string; name: string }[];
+                return workers?.some((w) =>
+                    w.id === user.id ||
+                    (teamMember?.id && w.id === teamMember.id) ||
+                    (profile.full_name && w.name === profile.full_name)
+                );
             })
             .map((e) => e.task_id as string)
     );

@@ -1,5 +1,6 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { Profile, ProjectTask, Project } from '@/types/database';
 import { WorkerTaskDetailClient, type TaskDetailData } from './task-detail-client';
 
@@ -10,6 +11,7 @@ interface PageProps {
 export default async function WorkerTaskDetailPage({ params }: PageProps) {
     const { id } = await params;
     const supabase = await createClient();
+    const admin = createAdminClient();
 
     const {
         data: { user },
@@ -30,7 +32,7 @@ export default async function WorkerTaskDetailPage({ params }: PageProps) {
     }
 
     // Fetch the specific task
-    const { data: task, error: taskError } = await supabase
+    const { data: task, error: taskError } = await admin
         .from('project_tasks')
         .select('*')
         .eq('id', id)
@@ -41,13 +43,13 @@ export default async function WorkerTaskDetailPage({ params }: PageProps) {
     }
 
     // Verify this worker is actually assigned to this task
-    const { data: scheduleEntries } = await supabase
+    const { data: scheduleEntries } = await admin
         .from('schedule_entries')
         .select('task_id, assigned_workers, schedule_id')
         .eq('task_id', id);
 
     // Fetch the team_member record to check for both user.id and team_member.id assignments
-    const { data: teamMember } = await supabase
+    const { data: teamMember } = await admin
         .from('team_members')
         .select('id')
         .eq('profile_id', user.id)
@@ -57,14 +59,18 @@ export default async function WorkerTaskDetailPage({ params }: PageProps) {
 
     const isAssigned = (scheduleEntries || []).some((entry) => {
         const workers = entry.assigned_workers as { id: string; name: string; job_title: string }[];
-        return workers?.some((w) => workerIds.has(w.id));
+        return workers?.some((w) =>
+            w.id === user.id ||
+            (teamMember?.id && w.id === teamMember.id) ||
+            (profile.full_name && w.name === profile.full_name)
+        );
     });
 
     // If not assigned, still show the task but with limited info (graceful fallback)
     // In production you'd want to block unauthorized access
 
     // Fetch project details
-    const { data: project } = await supabase
+    const { data: project } = await admin
         .from('projects')
         .select('id, name, location, start_date, end_date')
         .eq('id', task.project_id)
@@ -81,7 +87,7 @@ export default async function WorkerTaskDetailPage({ params }: PageProps) {
             });
         }
         if (allWorkerIds.size > 0) {
-            const { data: coworkerProfiles } = await supabase
+            const { data: coworkerProfiles } = await admin
                 .from('profiles')
                 .select('id, full_name, email')
                 .in('id', [...allWorkerIds]);
