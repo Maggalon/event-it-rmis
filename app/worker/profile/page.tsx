@@ -30,7 +30,15 @@ export default async function WorkerProfilePage() {
         return skillName;
     }).filter(Boolean) as string[];
 
-    // Count assigned tasks
+    // Count assigned tasks (checking both user.id and team_member.id)
+    const { data: teamMember } = await supabase
+        .from('team_members')
+        .select('id')
+        .eq('profile_id', user.id)
+        .single();
+
+    const workerIds = new Set([user.id, teamMember?.id].filter(Boolean));
+
     const { data: scheduleEntries } = await supabase
         .from('schedule_entries')
         .select('task_id, assigned_workers');
@@ -39,7 +47,7 @@ export default async function WorkerProfilePage() {
         (scheduleEntries || [])
             .filter((e) => {
                 const workers = e.assigned_workers as { id: string }[];
-                return workers?.some((w) => w.id === user.id);
+                return workers?.some((w) => workerIds.has(w.id));
             })
             .map((e) => e.task_id as string)
     );

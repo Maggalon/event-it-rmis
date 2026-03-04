@@ -24,6 +24,15 @@ export default async function WorkerTasksPage() {
         redirect('/dashboard');
     }
 
+    // Fetch the team_member record to check for both user.id and team_member.id assignments
+    const { data: teamMember } = await supabase
+        .from('team_members')
+        .select('id')
+        .eq('profile_id', user.id)
+        .single();
+
+    const workerIds = new Set([user.id, teamMember?.id].filter(Boolean));
+
     // Find all schedule_entries where this worker is assigned
     const { data: scheduleEntries } = await supabase
         .from('schedule_entries')
@@ -32,7 +41,7 @@ export default async function WorkerTasksPage() {
     // Filter entries where this worker appears
     const myEntries = (scheduleEntries || []).filter((entry) => {
         const workers = entry.assigned_workers as { id: string; name: string; job_title: string }[];
-        return workers?.some((w) => w.id === user.id);
+        return workers?.some((w) => workerIds.has(w.id));
     });
 
     const myTaskIds = [...new Set(myEntries.map((e) => e.task_id as string))];

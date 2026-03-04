@@ -46,9 +46,18 @@ export default async function WorkerTaskDetailPage({ params }: PageProps) {
         .select('task_id, assigned_workers, schedule_id')
         .eq('task_id', id);
 
+    // Fetch the team_member record to check for both user.id and team_member.id assignments
+    const { data: teamMember } = await supabase
+        .from('team_members')
+        .select('id')
+        .eq('profile_id', user.id)
+        .single();
+
+    const workerIds = new Set([user.id, teamMember?.id].filter(Boolean));
+
     const isAssigned = (scheduleEntries || []).some((entry) => {
         const workers = entry.assigned_workers as { id: string; name: string; job_title: string }[];
-        return workers?.some((w) => w.id === user.id);
+        return workers?.some((w) => workerIds.has(w.id));
     });
 
     // If not assigned, still show the task but with limited info (graceful fallback)
