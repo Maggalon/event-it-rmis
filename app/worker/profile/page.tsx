@@ -25,7 +25,10 @@ export default async function WorkerProfilePage() {
         .select('skill_id, skill:skills(id, name)')
         .eq('profile_id', user.id);
 
-    const skills = (profileSkills || []).map((ps: { skill?: { name: string } }) => ps.skill?.name).filter(Boolean) as string[];
+    const skills = (profileSkills || []).map((ps: any) => {
+        const skillName = Array.isArray(ps.skill) ? ps.skill[0]?.name : ps.skill?.name;
+        return skillName;
+    }).filter(Boolean) as string[];
 
     // Count assigned tasks
     const { data: scheduleEntries } = await supabase
