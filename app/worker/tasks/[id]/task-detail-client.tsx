@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import type { ProjectTask, Project, Profile } from '@/types/database';
+import type { ProjectTask, Project, Profile, TaskStatus } from '@/types/database';
+import { updateWorkerTaskStatus } from '../actions';
 
 export interface TaskDetailData extends ProjectTask {
     project?: Pick<Project, 'id' | 'name' | 'location' | 'start_date' | 'end_date'>;
@@ -72,24 +73,26 @@ export function WorkerTaskDetailClient({ task }: { task: TaskDetailData }) {
     const dateStr = formatDate(task.scheduled_start) || formatDate(task.project?.start_date);
     const priorityColor = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium;
 
-    async function updateTaskStatus(newStatus: 'in_progress' | 'completed') {
+    async function updateTaskStatus(newStatus: TaskStatus) {
         setIsUpdating(true);
         setError('');
-        const { error: err } = await supabase
-            .from('project_tasks')
-            .update({ status: newStatus })
-            .eq('id', task.id);
 
-        if (err) {
-            setError(err.message);
+        try {
+            const res = await updateWorkerTaskStatus(task.id, newStatus);
+            if (res.error) {
+                setError(res.error);
+                setIsUpdating(false);
+                return;
+            }
+
+            setStatus(newStatus);
             setIsUpdating(false);
-            return;
+            setShowConfirm(null);
+            router.refresh();
+        } catch (err: any) {
+            setError(err.message || 'An error occurred while updating task status');
+            setIsUpdating(false);
         }
-
-        setStatus(newStatus);
-        setIsUpdating(false);
-        setShowConfirm(null);
-        router.refresh();
     }
 
     const isCompleted = status === 'completed';
